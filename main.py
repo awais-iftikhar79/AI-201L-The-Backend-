@@ -120,6 +120,40 @@ class Visualizer:
             'layout': {'title': f"{x_col} vs {y_col}"}
         })
 
+    def histogram(self, column):
+        """Plots the distribution of a selected numeric column."""
+        if column not in self.df.columns:
+            st.warning("Selected column not found.")
+            return
+
+        st.subheader(f"📊 Distribution of {column}")
+        fig, ax = plt.subplots()
+        sns.histplot(self.df[column], kde=True, bins=30, ax=ax, color="skyblue")
+        ax.set_xlabel(column)
+        ax.set_ylabel("Frequency")
+        st.pyplot(fig)
+
+    def box_plot(self, numeric_col, category_col=None):
+        """Plots boxplot of a numeric column, optionally by category."""
+        if numeric_col not in self.df.columns:
+            st.warning("Numeric column not found.")
+            return
+
+        st.subheader("📦 Box Plot")
+        fig, ax = plt.subplots()
+
+        if category_col and category_col in self.df.columns:
+            sns.boxplot(x=self.df[category_col], y=self.df[numeric_col], ax=ax, palette="Set2")
+            ax.set_xlabel(category_col)
+            ax.set_ylabel(numeric_col)
+            ax.set_title(f"{numeric_col} by {category_col}")
+        else:
+            sns.boxplot(y=self.df[numeric_col], ax=ax, color="lightgreen")
+            ax.set_ylabel(numeric_col)
+            ax.set_title(f"Distribution of {numeric_col}")
+
+        st.pyplot(fig)
+
 
 class MLModel:
     """Handles machine learning model training and evaluation"""
@@ -131,9 +165,23 @@ class MLModel:
         self.model_choice = model_choice
 
     def prepare_data(self):
-        """Splits data into train test sets"""
+        """Prepares data by encoding categorical variables automatically."""
         X = self.df.drop(columns=[self.target])
         y = self.df[self.target]
+
+        # Encode categorical features
+        X = pd.get_dummies(X, drop_first=True)
+
+        # Ensure y is numeric if possible
+        if y.dtype == 'object':
+            try:
+                y = y.astype(float)
+            except ValueError:
+                # Try label encoding for string targets (if classification)
+                from sklearn.preprocessing import LabelEncoder
+                le = LabelEncoder()
+                y = le.fit_transform(y)
+
         return train_test_split(X, y, test_size=0.2, random_state=42)
 
     def select_model(self):
@@ -231,6 +279,31 @@ if uploaded_file:
         x_col = st.sidebar.selectbox("X-axis", numeric_cols)
         y_col = st.sidebar.selectbox("Y-axis", numeric_cols, index=1)
         visualizer.scatter_plot(x_col, y_col)
+
+    if st.sidebar.checkbox("Show Feature Distribution (Histogram)"):
+        num_cols = df.select_dtypes(include=np.number).columns
+        if len(num_cols) > 0:
+            selected_col = st.sidebar.selectbox("Select column for histogram", num_cols)
+            visualizer.histogram(selected_col)
+        else:
+            st.warning("No numeric columns available for histogram.")
+
+        # --- Box Plot ---
+    if st.sidebar.checkbox("Show Box Plot"):
+        num_cols = df.select_dtypes(include=np.number).columns
+        cat_cols = df.select_dtypes(exclude=np.number).columns
+
+        if len(num_cols) > 0:
+            numeric_col = st.sidebar.selectbox("Numeric column", num_cols, key="box_numeric")
+            category_col = None
+            if len(cat_cols) > 0:
+                category_col = st.sidebar.selectbox("Group by (optional)", ["None"] + list(cat_cols),
+                                                    key="box_category")
+                if category_col == "None":
+                    category_col = None
+            visualizer.box_plot(numeric_col, category_col)
+        else:
+            st.warning("No numeric columns available for box plot.")
 
     st.sidebar.header("4. Apply ML Model")
     target = st.sidebar.selectbox("Select Target Column", df.columns)
