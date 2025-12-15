@@ -1,0 +1,10 @@
+# Python virtual environments
+env/
+.venv/
+
+# Python cache files
+__pycache__/
+*.pyc
+
+# Other common files to ignore
+*.log
